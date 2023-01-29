@@ -6,7 +6,7 @@ library(RCurl)
 library(cowplot)
 seurat_phase <- RunUMAP(seurat_phase, 
                              dims = 1:40,
-                             reduction = "pca")#this is usually in the integration script
+                             reduction = "pca")
 #seurat_phase <- readRDS("./results/integrated_seurat.rds")
 #heatmap to help determine how many PCs to use when differentiating cell types
 DimHeatmap(seurat_phase,nfeatures=20,dims=1:9,cells=500,balanced=TRUE,fast=FALSE)+theme(axis.text.y = element_text(size = 1))

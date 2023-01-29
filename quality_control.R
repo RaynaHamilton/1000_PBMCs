@@ -1,3 +1,6 @@
+# reading in Seurat object for 1000 PBMC scRNA-seq data, then QC to remove low-
+# quality cells, debris and doublets etc.
+
 #https://hbctraining.github.io/scRNA-seq_online/lessons/03_SC_quality_control-setup.html
 
 library(SingleCellExperiment)
@@ -8,26 +11,22 @@ library(scales)
 library(cowplot)
 library(RCurl)
 
-#read count in as a sparse matrix, there are lots of 0s
-#use raw rather than filtered matrix 
-
+#read count in as a sparse matrix as there are lots of 0s in this datatype
 # Create a Seurat object for each sample
 
 seurat_data <- Read10X(data.dir = paste0("data/raw_feature_bc_matrix"))
-seurat_obj <- CreateSeuratObject(counts = seurat_data, 
-                                   min.features = 200)
-pbmcs <- seurat_obj
+pbmcs <- CreateSeuratObject(counts = seurat_data, 
+                                   min.features = 200)#min.features is min genes detected to not be filtered out as a low quality cell
 
-#min.features is min genes detected to not be filtered out as a low quality cell
 head(pbmcs)
-view(pbmcs@meta.data) #each row is a cell
+view(pbmcs@meta.data) #each row is a cell (barcode), with specified number of RNAs and unique RNAs/UMIs
 
 #https://hbctraining.github.io/scRNA-seq_online/lessons/04_SC_quality_control.html
 
 
 #calculate novelty score-number of genes per UMI
 pbmcs$log10GenesPerUMI <- log10(pbmcs$nFeature_RNA)/log10(pbmcs$nCount_RNA)
-#proportion of trascripts that map to mitochondrial genes
+#determine proportion of trascripts that map to mitochondrial genes - should be low for healthy cells
 pbmcs$mitoRatio <- PercentageFeatureSet(object=pbmcs,pattern="^MT-") #pattern may be different for nonhuman organisms. Start by trying MT, Mt, mt
 pbmcs$mitoRatio <- pbmcs@meta.data$mitoRatio/100
 metadata <- pbmcs@meta.data
@@ -40,10 +39,10 @@ pbmcs@meta.data <- metadata
 save(pbmcs,file="data/filtered_seurat.RData")
 
 
-print(paste(nrow(pbmcs@meta.data),"cells of 1000 cells expected."))
+print(paste(nrow(pbmcs@meta.data),"cells of 1000 cells expected.")) #1215 cells after filtering
 #now use visualizations to decide which cells to remove
 
-
+dir.create("plots")
 #UMIs/transcripts per cell - should be above 500
 metadata%>%ggplot(aes(x=nUMI))+geom_density(alpha=0.2)+
   scale_x_log10()+theme_classic()+ylab("Cell Density")+geom_vline(xintercept=3000)+annotate(geom="text",x=4000,y=1,label="x=3000")+
@@ -53,7 +52,7 @@ ggsave("plots/initial_UMI_density.png")
 #genes per cell.  should be one peak, usually not bimodal with a shoulder (indicates failure or very different types/proportions of cells)
 metadata%>%ggplot(aes(x=nGene))+geom_density(alpha=0.2)+
   scale_x_log10()+theme_classic()+ylab("Cell Density")+geom_vline(xintercept=2000)+annotate(geom="text",x=2500,y=1,label="x=2000")+
-  theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle(paste("Genes per",nrow(pbmcs@meta.data), "Cells"))
+  theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle(paste("Genes per",nrow(pbmcs@meta.data), "Cells"))+geom_vline(xintercept=4300)
 ggsave("plots/initial_gene_density.png")
 
 #novelty score(genes per UMI).  .8 is expected for good quality cells
@@ -79,17 +78,20 @@ ggplot(metadata,aes(x=nUMI,y=nGene,color=mitoRatio))+
   theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle("Initial nGenes vs nUMIs")
 ggsave("plots/initial_nGenes_vs_nUMIs.png")
 
-#bottom right cells could be dying or low complexity like RBCs
+#bottom right cells below blue line could be dying or low complexity like RBCs
 #bottom left are likely poor quality cells
 #note mitochondrial reads are only a significant proportion in low count cells
 
 #filter - adjust these thresholds according to your application
 #it is best to consider all metrics, not just one of above in isolation, to avoid excluding viable cells
-filtered_seurat <- subset(x=pbmcs,subset=(nUMI>=3000)&
+filtered_seurat <- subset(x=pbmcs,subset=(nUMI>=3000)&(nGene<=4200)&
                             (nGene>=2000)&(log10GenesPerUMI>0.82)&
                             (mitoRatio<0.2))
 
 print(paste(nrow(filtered_seurat@meta.data),"cells of 1000 cells expected."))
+#we are down to 1094 cells - we could be more stringent with our thresholds, but 
+# the remaining cells do all seem good quality, and based on my experimentation
+# this number could only be reduced more by excluding likely viable cells
 #remove genes with 0 counts so they don't reduce average expression
 counts <- GetAssayData(object=filtered_seurat,slot="counts")
 nonzero <- counts>0

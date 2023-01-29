@@ -46,23 +46,26 @@ dir.create("plots")
 #UMIs/transcripts per cell - should be above 500
 metadata%>%ggplot(aes(x=nUMI))+geom_density(alpha=0.2)+
   scale_x_log10()+theme_classic()+ylab("Cell Density")+geom_vline(xintercept=3000)+annotate(geom="text",x=4000,y=1,label="x=3000")+
-  theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle(paste("UMIs per",nrow(pbmcs@meta.data), "Cells"))
+  theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle(paste("UMIs per",nrow(pbmcs@meta.data), "Cells"))+
+  geom_vline(xintercept=19000)+annotate(geom="text",x=20000,y=1,label="x=19000")
 ggsave("plots/initial_UMI_density.png")
 
-#genes per cell.  should be one peak, usually not bimodal with a shoulder (indicates failure or very different types/proportions of cells)
+#genes per cell.  should be one peak, usually not bimodal with a shoulder 
+# (bimodal indicates failure or very different types/proportions of cells)
 metadata%>%ggplot(aes(x=nGene))+geom_density(alpha=0.2)+
   scale_x_log10()+theme_classic()+ylab("Cell Density")+geom_vline(xintercept=2000)+annotate(geom="text",x=2500,y=1,label="x=2000")+
-  theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle(paste("Genes per",nrow(pbmcs@meta.data), "Cells"))+geom_vline(xintercept=4300)
+  theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle(paste("Genes per",nrow(pbmcs@meta.data), "Cells"))+geom_vline(xintercept=4300)+
+  annotate(geom="text",x=4500,y=1,label="x=4300")
+#I have added two thresholds to filter out cells with very few genes and likely doublets
 ggsave("plots/initial_gene_density.png")
 
 #novelty score(genes per UMI).  .8 is expected for good quality cells
 metadata%>%ggplot(aes(x=log10GenesPerUMI))+geom_density(alpha=0.2)+
-  theme_classic()+ylab("Cell Density")+geom_vline(xintercept=0.82)+annotate(geom="text",x=.83,y=5,label="x=82")+
+  theme_classic()+ylab("Cell Density")+geom_vline(xintercept=0.82)+annotate(geom="text",x=.83,y=5,label="x=0.82")+
   theme(plot.title=element_text(hjust=0.5,face="bold"))+ggtitle("Genes per UMI")
 ggsave("plots/initial_genes_per_UMI.png")
 
 #mitochondrial ratio, should be below .2 usually
-
 ggplot(metadata,aes(x=mitoRatio)) + 
 geom_density(alpha = 0.2) + 
 scale_x_log10() + 
@@ -85,13 +88,13 @@ ggsave("plots/initial_nGenes_vs_nUMIs.png")
 #filter - adjust these thresholds according to your application
 #it is best to consider all metrics, not just one of above in isolation, to avoid excluding viable cells
 filtered_seurat <- subset(x=pbmcs,subset=(nUMI>=3000)&(nGene<=4200)&
-                            (nGene>=2000)&(log10GenesPerUMI>0.82)&
+                            (nGene>=2000)&(nGene<=19000)&(log10GenesPerUMI>0.82)&
                             (mitoRatio<0.2))
 
 print(paste(nrow(filtered_seurat@meta.data),"cells of 1000 cells expected."))
-#we are down to 1094 cells - we could be more stringent with our thresholds, but 
-# the remaining cells do all seem good quality, and based on my experimentation
-# this number could only be reduced more by excluding likely viable cells
+#we are down to 851 cells which I trust are not doublets or dying - the thresholds
+# could be a bit more generous if desired
+
 #remove genes with 0 counts so they don't reduce average expression
 counts <- GetAssayData(object=filtered_seurat,slot="counts")
 nonzero <- counts>0

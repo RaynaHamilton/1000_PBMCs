@@ -1,3 +1,7 @@
+# scRNA-seq clustering by a range of resolutions, visualization to ensure clustering
+# is not determined by uninteresting variables like mitochondrial ratio
+# this script should be run after scrna_normalization.R
+
 # https://hbctraining.github.io/scRNA-seq_online/lessons/07_SC_clustering_cells_SCT.html
 
 library(Seurat)
@@ -16,37 +20,39 @@ ggsave("plots/PCA_heatmap.png")
 print(x=seurat_phase[["pca"]],dims=1:10,nfeatures=5)
 
 #can also use elbow plot to identify variation threshold
-ElbowPlot(object=seurat_phase,ndims=40)
+#ElbowPlot(object=seurat_phase,ndims=40)
 
-#finnd neighbours, then graph-based clusters
-#resolution between .4 and 1.4 is good for 3000-5000 cells, try a few values
+#find neighbours, then graph-based clusters
+# try a few values for resolution
 seurat_phase <- FindNeighbors(object=seurat_phase,dims=1:40)
 seurat_phase <- FindClusters(object=seurat_phase,resolution=c(0.4,0.6,0.8,1,1.2,1.4))
 
-plots=data.frame()
 seurat_phase@meta.data%>%View()
 for (val in c(0.3,0.4,0.6,0.8,1,1.2,1.4)){
   Idents(object=seurat_phase) <- paste("RNA_snn_res.",as.character(val),sep="")
   print(DimPlot(seurat_phase,reduction='umap',group.by='ident',label=TRUE,label.size=6)+ggtitle(paste("Resolution=",as.character(val),sep="")))
   ggsave(paste("plots/clustering_resolution=",val,".png"))
   }
+#The clusters seem very consistent for a wide range of resolutions beyond 0.4
 
-#Idents(object=seurat_phase) <- paste("integrated_snn_res.",as.character(1.0),sep="")
+
 #https://hbctraining.github.io/scRNA-seq_online/lessons/08_SC_clustering_quality_control.html
-#get identity and sample information to determine cells per cluster
-n_cells <- FetchData(seurat_phase,vars=c("ident","orig.ident"))%>%
+#Determine cells per cluster
+FetchData(seurat_phase,vars=c("ident","orig.ident"))%>%
   dplyr::count(ident,orig.ident)%>%
   tidyr::spread(ident,n)
-View(n_cells)
 
 
 #determine whether they cluster by cell cycle stage
 DimPlot(seurat_phase,label=TRUE,split.by="Phase")+NoLegend() #all about the same unsurprisingly
 ggsave("plots/clustering_by_cell_cycle.png")
+#no clustering by cell cycle stage, thankfully
+
 #check if they cluster by other uninteresting sources of variation.
 metrics <- c("nUMI","nGene","S.Score","G2M.Score","mitoRatio")
 print(FeaturePlot(seurat_phase,reduction="umap",features=metrics,pt.size=0.4,
             order=T,min.cutoff="q10",label=T))
 ggsave("plots/clustering_by_other_variables.png")
+#minimal clustering by these other variables as well
 
-# https://hbctraining.github.io/scRNA-seq_online/lessons/08_SC_clustering_quality_control.html has list of cell types and markers
+# https://hbctraining.github.io/scRNA-seq_online/lessons/08_SC_clustering_quality_control.html has list of some cell types and markers
